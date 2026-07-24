@@ -1200,6 +1200,19 @@ enum {
 #define JS_ATOM_LAST_KEYWORD JS_ATOM_using
 #define JS_ATOM_LAST_STRICT_KEYWORD JS_ATOM_yield
 
+/* bro static atoms: index -> predefined atom. New names get their own entry
+   in the table above (JS_ATOM_bro_*); shared ones alias the QuickJS atom of
+   the same name, so callers need not know which is which. Declared in
+   quickjs.h and reached through JS_BRO(); see quickjs-atom-bro.h. */
+extern const JSAtom js_bro_atoms[JS_BRO_ATOM_COUNT];
+const JSAtom js_bro_atoms[JS_BRO_ATOM_COUNT] = {
+#define BRO_ATOM_NEW(id, str) JS_ATOM_bro_ ## id,
+#define BRO_ATOM_SHARED(id)   JS_ATOM_ ## id,
+#include "quickjs-atom-bro.h"
+#undef BRO_ATOM_NEW
+#undef BRO_ATOM_SHARED
+};
+
 static const char js_atom_init[] =
 #define DEF(name, str) str "\0"
 #include "quickjs-atom.h"
@@ -3351,8 +3364,13 @@ static int JS_InitAtoms(JSRuntime *rt)
     rt->atom_count = 0;
     rt->atom_size = 0;
     rt->atom_free_index = 0;
-    if (JS_ResizeAtomHash(rt, 512))     /* there are at least 504 predefined atoms */
+    if (JS_ResizeAtomHash(rt, 1024))    /* predefined atoms, incl. quickjs-atom-bro.h */
         return -1;
+
+    /* The predefined table is positional: every entry in js_bro_atoms must
+       name a distinct string, or __JS_NewAtomInit would hand back an existing
+       atom and silently shift every index after it. */
+    assert(JS_ATOM_bro_x != JS_ATOM_NULL);
 
     p = js_atom_init;
     for(i = 1; i < JS_ATOM_END; i++) {

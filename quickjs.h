@@ -989,6 +989,37 @@ JS_EXTERN int JS_SetPropertyInt64(JSContext *ctx, JSValueConst this_obj,
 JS_EXTERN int JS_SetPropertyStr(JSContext *ctx, JSValueConst this_obj,
                                 const char *prop, JSValue val);
 JS_EXTERN int JS_HasProperty(JSContext *ctx, JSValueConst this_obj, JSAtom prop);
+
+/* --- bro static atoms ----------------------------------------------------
+ *
+ * JS_GetPropertyStr()/JS_SetPropertyStr() intern their `const char *` on
+ * every call: hash the bytes, probe the atom table, refcount the result,
+ * release it again. For a binding that reads a fixed set of option keys in
+ * a loop that is the dominant cost of the call.
+ *
+ * Names listed in quickjs-atom-bro.h are predefined instead — created with
+ * the runtime, identical in every runtime, and const (JS_DupAtom and
+ * JS_FreeAtom are no-ops on them). JS_BRO() is a load from a constant
+ * table, so the interning disappears entirely:
+ *
+ *     JSValue v = JS_GetProperty(ctx, obj, JS_BRO(hw));
+ *
+ * Use JS_GetPropertyStr for names that are genuinely dynamic; use these for
+ * the fixed vocabulary a binding knows at compile time.
+ */
+enum {
+#define BRO_ATOM_NEW(id, str) JS_BRO_ATOM_ ## id,
+#define BRO_ATOM_SHARED(id)   JS_BRO_ATOM_ ## id,
+#include "quickjs-atom-bro.h"
+#undef BRO_ATOM_NEW
+#undef BRO_ATOM_SHARED
+    JS_BRO_ATOM_COUNT
+};
+
+extern JS_EXTERN const JSAtom js_bro_atoms[JS_BRO_ATOM_COUNT];
+
+#define JS_BRO(id) (js_bro_atoms[JS_BRO_ATOM_ ## id])
+
 JS_EXTERN int JS_IsExtensible(JSContext *ctx, JSValueConst obj);
 JS_EXTERN int JS_PreventExtensions(JSContext *ctx, JSValueConst obj);
 JS_EXTERN int JS_DeleteProperty(JSContext *ctx, JSValueConst obj, JSAtom prop, int flags);

@@ -258,6 +258,14 @@ DEF(CallSite, "CallSite")
 DEF(DisposableStack, "DisposableStack")
 DEF(AsyncDisposableStack, "AsyncDisposableStack")
 DEF(SuppressedError, "SuppressedError")
+
+/* bro static atoms — see quickjs-atom-bro.h. These must stay STRING atoms,
+   so they belong before Private_brand and the symbol block: JS_AddIntrinsic
+   classifies by index (>= JS_ATOM_Symbol_toPrimitive means symbol). */
+#define BRO_ATOM_NEW(id, str) DEF(bro_ ## id, str)
+#include "quickjs-atom-bro.h"
+#undef BRO_ATOM_NEW
+
 /* private symbols */
 DEF(Private_brand, "<brand>")
 /* symbols */
