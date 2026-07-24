@@ -206,6 +206,30 @@ static inline uint32_t hash32(uint32_t a)
     return a * 0x61c88647;
 }
 
+// Full-avalanche finalizer (murmur3 fmix32).
+//
+// hash32() above is multiplicative: a * K only ever propagates entropy
+// towards the HIGH bits, so it is sound only when the consumer keeps the
+// high bits (h >> (32 - log2(size))). A consumer that masks the LOW bits
+// instead (h & (size - 1)) sees none of that mixing, and any input whose
+// low bits are structured stays structured. Doubles are the worst case:
+// a "round" number such as a small integer has an all-zero low mantissa
+// word, and consecutive ones differ in the high word by a large power of
+// two, so a * K leaves that many trailing zero bits and every key lands
+// in a handful of buckets.
+//
+// This one avalanches in both directions, so it is safe for low-bit
+// masking. Prefer it whenever the result feeds `& (size - 1)`.
+static inline uint32_t hash_mix32(uint32_t h)
+{
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+    return h;
+}
+
 /* WARNING: undefined if a = 0 */
 static inline int clz32(unsigned int a)
 {

@@ -52786,6 +52786,7 @@ static uint32_t map_hash_key(JSContext *ctx, JSValueConst key)
     double d;
     JSFloat64Union u;
     JSBigInt *r;
+    uintptr_t p;
 
     switch(tag) {
     case JS_TAG_BOOL:
@@ -52799,7 +52800,10 @@ static uint32_t map_hash_key(JSContext *ctx, JSValueConst key)
         break;
     case JS_TAG_OBJECT:
     case JS_TAG_SYMBOL:
-        h = (uintptr_t)JS_VALUE_GET_PTR(key) * 3163;
+        /* fold the whole pointer down to 32 bits, then avalanche: callers
+           mask the LOW bits, and allocator-aligned pointers have none. */
+        p = (uintptr_t)JS_VALUE_GET_PTR(key);
+        h = hash_mix32((uint32_t)p ^ (uint32_t)((uint64_t)p >> 32));
         break;
     case JS_TAG_INT:
         d = JS_VALUE_GET_INT(key);
@@ -52818,7 +52822,12 @@ static uint32_t map_hash_key(JSContext *ctx, JSValueConst key)
             d = NAN;
     hash_float64:
         u.d = d;
-        h = (u.u32[0] ^ u.u32[1]) * 3163;
+        /* NB: must avalanche, not just multiply; see hash_mix32(). Small
+           integers have u32[0] == 0 and high words that differ by a large
+           power of two, which a bare multiply maps onto very few buckets.
+           The hash_seed below cannot repair that: XOR by a constant moves
+           the buckets around but does not spread a collapsed key set. */
+        h = hash_mix32(u.u32[0] ^ u.u32[1]);
         tag = JS_TAG_FLOAT64;
         break;
     default:
