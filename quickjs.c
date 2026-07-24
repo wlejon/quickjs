@@ -10114,6 +10114,72 @@ JSValue JS_GetPropertyInt64(JSContext *ctx, JSValueConst obj, int64_t idx)
 }
 
 /* `prop` may be pure ASCII or UTF-8 encoded */
+/* Read n numeric properties in one pass over the object.
+
+   Bindings that take an options object read a fixed set of names and want
+   numbers, not JSValues. Doing that with JS_GetProperty is one API call and
+   one JSValue round-trip per name; this walks the object's own properties
+   directly and converts in place, so a four-field option bag costs one call
+   instead of four.
+
+   out[] is NOT cleared: prefill it with the defaults, and only the names
+   actually present overwrite their slot. Returns how many were found.
+
+   Anything that is not a plain own data property -- an accessor, an exotic
+   object, a name that lives on the prototype -- falls back to JS_GetProperty
+   for that name alone, so the semantics match a per-name read exactly. */
+int JS_GetPropsFloat64(JSContext *ctx, JSValueConst obj, int n,
+                       const JSAtom *keys, double *out)
+{
+    JSObject *p;
+    JSShapeProperty *prs;
+    JSProperty *pr;
+    JSValue v;
+    int i, found = 0;
+
+    if (JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT)
+        return 0;
+    p = JS_VALUE_GET_OBJ(obj);
+
+    for (i = 0; i < n; i++) {
+        if (likely(!p->is_exotic)) {
+            prs = find_own_property(&pr, p, keys[i]);
+            if (prs) {
+                if (likely((prs->flags & JS_PROP_TMASK) == JS_PROP_NORMAL)) {
+                    switch (JS_VALUE_GET_TAG(pr->u.value)) {
+                    case JS_TAG_FLOAT64:
+                        out[i] = JS_VALUE_GET_FLOAT64(pr->u.value);
+                        found++;
+                        continue;
+                    case JS_TAG_INT:
+                        out[i] = JS_VALUE_GET_INT(pr->u.value);
+                        found++;
+                        continue;
+                    default:
+                        break;
+                    }
+                }
+            } else if (p->shape->proto == NULL) {
+                /* absent, and nothing to inherit it from */
+                continue;
+            }
+        }
+        /* accessor, exotic, inherited, or a value needing coercion */
+        v = JS_GetProperty(ctx, obj, keys[i]);
+        if (JS_IsException(v))
+            return -1;
+        if (!JS_IsUndefined(v)) {
+            if (JS_ToFloat64(ctx, &out[i], v)) {
+                JS_FreeValue(ctx, v);
+                return -1;
+            }
+            found++;
+        }
+        JS_FreeValue(ctx, v);
+    }
+    return found;
+}
+
 JSValue JS_GetPropertyStr(JSContext *ctx, JSValueConst this_obj,
                           const char *prop)
 {

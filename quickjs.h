@@ -1020,6 +1020,14 @@ extern JS_EXTERN const JSAtom js_bro_atoms[JS_BRO_ATOM_COUNT];
 
 #define JS_BRO(id) (js_bro_atoms[JS_BRO_ATOM_ ## id])
 
+/* Read n numeric properties in one pass over the object. Prefill out[] with
+   defaults; only names that are present overwrite their slot. Returns the
+   number found, or -1 on exception. Semantics match reading each name with
+   JS_GetProperty -- accessors, exotic objects and inherited names fall back
+   to exactly that -- but a plain option bag never materialises a JSValue. */
+JS_EXTERN int JS_GetPropsFloat64(JSContext *ctx, JSValueConst obj, int n,
+                                 const JSAtom *keys, double *out);
+
 JS_EXTERN int JS_IsExtensible(JSContext *ctx, JSValueConst obj);
 JS_EXTERN int JS_PreventExtensions(JSContext *ctx, JSValueConst obj);
 JS_EXTERN int JS_DeleteProperty(JSContext *ctx, JSValueConst obj, JSAtom prop, int flags);
